@@ -1,7 +1,24 @@
 use std::env;
-use std::net::{TcpListener, TcpStream};
-use std::io::{Read, Write};
 use std::thread;
+use std::io::{Read, Write};
+use std::net::{TcpListener, TcpStream};
+
+fn handle_direction(src: &TcpStream, dst: &TcpStream, on_recv: fn(&[u8], usize) -> &[u8]) -> thread::JoinHandle<()> {
+    let mut src = src.try_clone().unwrap();
+    let mut dst = dst.try_clone().unwrap();
+
+    thread::spawn(move || {
+        let mut buf = [0u8; 512];
+        loop {
+            let n = src.read(&mut buf).unwrap();
+            if n == 0 {
+                continue;
+            }
+            let res = on_recv(&buf, n);
+            dst.write(&res).unwrap();
+        }
+    })
+}
 
 fn main() {
     let args: Vec<String> = env::args().collect();
@@ -18,42 +35,34 @@ fn main() {
 
     println!("Listening for incoming connections...");
     let listener = TcpListener::bind(src).unwrap();
-    let connection_src = listener.accept().unwrap();
-    println!("Accepted incoming connection by peer {:?}", connection_src.1);
-    let mut connection_src = connection_src.0;
+    let (stream_src, sockaddr_src) = listener.accept().unwrap();
+    println!("Accepted incoming connection by peer {:?}", sockaddr_src);
 
-    println!("Establishing connection to destination {}...", dst);
-    let mut connection_dst = TcpStream::connect(dst).unwrap();
-    println!("Connection established. Data will be proxied now");
+    println!("Trying to connect to destination {:?}...", dst);
+    let stream_dst = TcpStream::connect(dst).unwrap();
 
-    // src -> proxy -> dst
-    let t1 = thread::spawn(|| {
-        loop {
-            let mut buf = [0u8; 256];
-            let bytes_read = connection_src.read(&mut buf[..]).unwrap_or(0);
-            if bytes_read == 0 {
-                continue;
-            }
-
-            println!("Received {} bytes from src, sending to dst...", bytes_read);
-            connection_dst.write(&buf[..bytes_read]);
+    let t1 = handle_direction(&stream_src, &stream_dst, |buf, n| {
+        let b = &buf[..n];
+        if let Ok(s) = std::str::from_utf8(b) {
+            println!("{:?}", s);
+        } else {
+            println!("{:02x?}", b);
         }
+
+        b
     });
 
-    // src <- proxy <- dst
-    let t2 = thread::spawn(|| {
-        loop {
-            let mut buf = [0u8; 256];
-            let bytes_read = connection_dst.read(&mut buf[..]).unwrap_or(0);
-            if bytes_read == 0 {
-                continue;
-            }
-
-            println!("Received {} bytes from dst, sending to src...", bytes_read);
-            connection_src.write(&buf[..bytes_read]);
+    let t2 = handle_direction(&stream_dst, &stream_src, |buf, n| {
+        let b = &buf[..n];
+        if let Ok(s) = std::str::from_utf8(b) {
+            println!("{:?}", s);
+        } else {
+            println!("{:02x?}", b);
         }
+
+        b
     });
 
-    t1.join();
-    t2.join();
+    t1.join().unwrap();
+    t2.join().unwrap();
 }
