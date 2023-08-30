@@ -94,18 +94,6 @@ const char *rr_type_strings[] = {
         [TYPE_AMTRELAY]    = "AMTRELAY"
 };
 
-const char *flag_strings[] = {
-
-}
-
-        MASK_QR        = (1 <<  0), // query or response
-        MASK_OPCODE    = (1 <<  1), // standard query, inverse query or status
-        MASK_AA        = (1 <<  5), // authoritative answer
-        MASK_TC        = (1 <<  6), // truncation
-        MASK_RD        = (1 <<  7), // recursion desired
-        MASK_RA        = (1 <<  8), // recursion available
-        MASK_RCODE     = (1 << 12)  // response code
-
 uint8_t *ut16_write(uint8_t *buf, uint16_t val)
 {
         uint16_t val_hton = htons(val);
