@@ -15,23 +15,23 @@ enum rcode {
 };
 
 enum shifts {
-        SHIFT_QR        =  0,
-        SHIFT_OPCODE    =  1,
-        SHIFT_AA        =  5,
-        SHIFT_TC        =  6,
-        SHIFT_RD        =  7,
-        SHIFT_RA        =  8,
-        SHIFT_RCODE     = 12
+        SHIFT_RD        =  0,
+        SHIFT_TC        =  1,
+        SHIFT_OPCODE    =  3,
+        SHIFT_QR        =  7,
+        SHIFT_RCODE     =  8,
+        SHIFT_AA        = 12,
+        SHIFT_RA        = 15
 };
 
 enum masks {
-        MASK_QR        = (1 <<  0), // query or response
-        MASK_OPCODE    = (1 <<  1), // standard query, inverse query or status
-        MASK_AA        = (1 <<  5), // authoritative answer
-        MASK_TC        = (1 <<  6), // truncation
-        MASK_RD        = (1 <<  7), // recursion desired
-        MASK_RA        = (1 <<  8), // recursion available
-        MASK_RCODE     = (1 << 12)  // response code
+        MASK_QR        = 0x1, // query or response
+        MASK_OPCODE    = 0x7, // standard query, inverse query or status
+        MASK_AA        = 0x1, // authoritative answer
+        MASK_TC        = 0x1, // truncation
+        MASK_RD        = 0x1, // recursion desired
+        MASK_RA        = 0x1, // recursion available
+        MASK_RCODE     = 0x1  // response code
 };
 
 enum class {
@@ -172,4 +172,11 @@ struct dns_message {
 
 uint8_t *serialize_dns_query(uint8_t *buf, const struct dns_query *dns_query);
 uint8_t *serialize_dns_answer(uint8_t *buf, const struct dns_answer *dns_answer);
-uint8_t *serialize_dns_message(size_t *len, const struct dns_message *dns_message);
+uint8_t *serialize_dns_address(uint8_t *buf, const char *encoded);
+void serialize_dns_message(uint8_t **buf, size_t *len, const struct dns_message *dns_message);
+
+// buf_full needed in case messages are compressed
+const uint8_t *deserialize_dns_query(struct dns_query *dns_query, const uint8_t *buf, const uint8_t *buf_full);
+const uint8_t *deserialize_dns_answer(struct dns_answer *dns_answer, const uint8_t *buf, const uint8_t *buf_full);
+const uint8_t *deserialize_dns_address(const uint8_t *buf, const uint8_t *buf_full, char **decoded);
+void deserialize_dns_message(struct dns_message *dns_message, size_t *len);
