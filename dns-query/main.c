@@ -58,25 +58,14 @@ void parse_options(struct options *options, int argc, char *argv[])
                                 print_usage_and_quit();
                         }
 
-                        bool found = false;
-                        for (size_t i = 0; i < TYPE_COUNT; i++) {
-                                const char *s = rr_type_strings[i];
-                                if (s == NULL) {
-                                        continue;
-                                }
+                        enum rr_type rr_type = string_to_rr_type(type);
 
-                                if (strcmp(type, s) == 0) {
-                                        options->type = i;
-                                        found = true;
-                                }
-                        }
-
-                        if (found) {
+                        if (rr_type != -1) {
+                                options->type = rr_type;
                                 i++;
                         } else {
                                 print_usage_and_quit();
                         }
-
                 } else if (strcmp(argv[i], "-f") == 0) {
                         if (i + 1 == argc) {
                                 // -f was last argument
@@ -110,25 +99,10 @@ void parse_options(struct options *options, int argc, char *argv[])
 
 int main(int argc, char *argv[])
 {
-        struct dns_answer q = { 0 };
-
-        const uint8_t bytes[] = {
-            0x85, 0xc1, 0x81, 0x80, 0x00, 0x01, 0x00, 0x01, 0x00, 0x00, 0x00,
-            0x00, 0x05, 0x66, 0x6f, 0x6e, 0x74, 0x73, 0x07, 0x67, 0x73, 0x74,
-            0x61, 0x74, 0x69, 0x63, 0x03, 0x63, 0x6f, 0x6d, 0x00, 0x00, 0x01,
-            0x00, 0x01, 0xc0, 0x0c, 0x00, 0x01, 0x00, 0x01, 0x00, 0x00, 0x00,
-            0xbb, 0x00, 0x04, 0x8e, 0xfa, 0xb9, 0x03 };
-
-        deserialize_dns_answer(&q, bytes + 35, bytes);
-        printf("%s\n", q.name);
-        printf("%s\n", rr_type_strings[q.type]);
-        printf("%d\n", q.class);
-        printf("%d\n", q.len_rdata);
-
         struct options options = {
                 // initialized with default values
                 .type = TYPE_A,
-                .recurse = true,
+                .recurse = false,
                 .dns_server = "192.168.2.1",
                 .target = ""
         };
@@ -157,15 +131,15 @@ int main(int argc, char *argv[])
                 .header = {
                         .id = 0x6969,
                         .flags = (options.recurse ? (1 << SHIFT_RD) : 0) |
-                                (options.opcode << SHIFT_OPCODE),
-                        .num_questions = 1,
+                                 (options.opcode << SHIFT_OPCODE),
+                        .num_queries = 1,
                 },
                 .queries = malloc(1 * sizeof(struct dns_query))
         };
 
         query.queries[0].type = options.type;
         query.queries[0].name = options.target;
-        query.queries[0].class = CLASS_INTERNET;
+        query.queries[0].clas = CLAS_INTERNET;
 
         size_t buf_len;
         uint8_t *buf_send;
@@ -176,7 +150,7 @@ int main(int argc, char *argv[])
                 fprintf(stderr, "failed to send data: %s\n", strerror(errno));
         }
 
-        printf("retrieving response...\n");
+        printf("awaiting response...\n");
         uint8_t buf_recv[512] = { 0 };
         size_t n = 0;
         if ((n = recvfrom(sock, buf_recv, sizeof(buf_recv), 0,
@@ -185,6 +159,11 @@ int main(int argc, char *argv[])
         }
 
         printf("received %zu bytes\n", n);
+        struct dns_message response;
+        deserialize_dns_message(&response, buf_recv);
+        char *buf = malloc(1024);
+        dns_message_format(buf, 1024, &response);
+        printf("%s\n", buf);
 
         return EXIT_SUCCESS;
 }

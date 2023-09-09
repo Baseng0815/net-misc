@@ -1,5 +1,6 @@
 #include <stdint.h>
 #include <stddef.h>
+#include <stdio.h>
 
 enum opcode {
         OPCODE_QUERY    = 0, // standard query
@@ -8,20 +9,22 @@ enum opcode {
 };
 
 enum rcode {
-        RCODE_NOERROR   = 0,
-        RCODE_FORMERR   = 1, // format error
-        RCODE_SERVFAIL  = 2,
-        RCODE_NXDOMAIN  = 3, // nonexistent domain
+        RCODE_NOERROR           = 0,
+        RCODE_FORMERR           = 1, // format error
+        RCODE_SERVFAIL          = 2,
+        RCODE_NXDOMAIN          = 3, // nonexistent domain
+        RCODE_NOT_IMPLEMENTED   = 4,
+        RCODE_REFUSED           = 5,
 };
 
 enum shifts {
-        SHIFT_RD        =  0,
-        SHIFT_TC        =  1,
-        SHIFT_OPCODE    =  3,
-        SHIFT_QR        =  7,
-        SHIFT_RCODE     =  8,
-        SHIFT_AA        = 12,
-        SHIFT_RA        = 15
+        SHIFT_RD        =  8,
+        SHIFT_TC        =  9,
+        SHIFT_OPCODE    = 11,
+        SHIFT_QR        = 15,
+        SHIFT_RCODE     =  0,
+        SHIFT_AA        = 10,
+        SHIFT_RA        =  7
 };
 
 enum masks {
@@ -31,15 +34,17 @@ enum masks {
         MASK_TC        = 0x1, // truncation
         MASK_RD        = 0x1, // recursion desired
         MASK_RA        = 0x1, // recursion available
-        MASK_RCODE     = 0x1  // response code
+        MASK_RCODE     = 0xf  // response code
 };
 
-enum class {
-        CLASS_INTERNET      = 1,
-        CLASS_CHAOS         = 3,
-        CLASS_HESIOD        = 4,
-        /* CLASS_QCLASS_NONE   = 254, */
-        /* CLASS_QCLASS_ANY    = 255 */
+// we ignore proper orthography due to class keyword
+enum clas {
+        CLAS_INTERNET      = 1,
+        CLAS_CHAOS         = 3,
+        CLAS_HESIOD        = 4,
+        CLAS_COUNT
+        /* clas_Qclas_NONE   = 254, */
+        /* clas_Qclas_ANY    = 255 */
 };
 
 enum rr_type {
@@ -131,44 +136,46 @@ enum rr_type {
         TYPE_DOA         = 259, // Digital Object Architecture     [draft-durand-doa-over-dns]     DOA/doa-completed-template      2017-08-30
         TYPE_AMTRELAY    = 260, // Automatic Multicast Tunneling Relay     [RFC8777]       AMTRELAY/amtrelay-completed-template    2019-02-06
         TYPE_COUNT
-        /* TYPE_TA          = 32768, // DNSSEC Trust Authorities        [Sam_Weiler][http://cameo.library.cmu.edu/][ Deploying DNSSEC Without a Signed Root. Technical Report 1999-19, Information Networking Institute, Carnegie Mellon University, April 2004.]               2005-12-13 */
-        /* TYPE_DLV         = 32769 // DNSSEC Lookaside Validation (OBSOLETE)  [RFC8749][RFC4431] */
+                /* TYPE_TA          = 32768, // DNSSEC Trust Authorities        [Sam_Weiler][http://cameo.library.cmu.edu/][ Deploying DNSSEC Without a Signed Root. Technical Report 1999-19, Information Networking Institute, Carnegie Mellon University, April 2004.]               2005-12-13 */
+                /* TYPE_DLV         = 32769 // DNSSEC Lookaside Validation (OBSOLETE)  [RFC8749][RFC4431] */
 };
-
-extern const char *rr_type_strings[];
 
 struct dns_query {
         const char *name;
         uint16_t type;
-        uint16_t class;
-} __attribute__((packed));
+        uint16_t clas;
+};
 
 struct dns_answer {
         const char *name;
         uint16_t type;
-        uint16_t class;
+        uint16_t clas;
         uint32_t ttl;
-        uint16_t len_rdata;
+        uint16_t rdata_len;
         uint8_t *rdata;
-} __attribute__((packed));
+};
 
 struct dns_header {
         uint16_t id;
         uint16_t flags;
 
         // number of records of following sections
-        uint16_t num_questions;
+        uint16_t num_queries;
         uint16_t num_answer_rr; // always 0 for query
         uint16_t num_authority_rr; // always 0 for query
         uint16_t num_additional_rr; // always 0 for query
-} __attribute__((packed));
+};
 
 struct dns_message {
         struct dns_header header;
 
         struct dns_query *queries;
         struct dns_answer *answers;
-} __attribute__((packed));
+};
+
+enum rr_type string_to_rr_type(const char *string);
+const char *rr_type_to_string(enum rr_type type);
+const char *clas_to_string(enum clas clas);
 
 uint8_t *serialize_dns_query(uint8_t *buf, const struct dns_query *dns_query);
 uint8_t *serialize_dns_answer(uint8_t *buf, const struct dns_answer *dns_answer);
@@ -179,4 +186,6 @@ void serialize_dns_message(uint8_t **buf, size_t *len, const struct dns_message 
 const uint8_t *deserialize_dns_query(struct dns_query *dns_query, const uint8_t *buf, const uint8_t *buf_full);
 const uint8_t *deserialize_dns_answer(struct dns_answer *dns_answer, const uint8_t *buf, const uint8_t *buf_full);
 const uint8_t *deserialize_dns_address(const uint8_t *buf, const uint8_t *buf_full, char **decoded);
-void deserialize_dns_message(struct dns_message *dns_message, size_t *len);
+void deserialize_dns_message(struct dns_message *dns_message, const uint8_t *buf);
+
+void dns_message_format(char *buf, size_t n, const struct dns_message *message);
