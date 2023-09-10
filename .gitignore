@@ -1,1 +1,9 @@
 target/
+
+*.cmd
+*.ko
+*.o
+*.mod
+*.mod.c
+*.symvers
+*.order
